@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Runtime.InteropServices;
 using TMPro;
 using UnityEngine;
@@ -14,7 +15,9 @@ public class DisplaySettings : MonoBehaviour
 
     private const int GWL_STYLE = -16;
     private const int WS_OVERLAPPEDWINDOW = 0x00CF0000;
-    private const int WS_POPUP = unchecked((int)0x80000000); // Convert to int using unchecked
+    private const int WS_POPUP = unchecked((int)0x80000000);
+
+    private const float WINDOWED_BORDERLESS_DURATION = 0.25f;
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetActiveWindow();
@@ -71,24 +74,19 @@ public class DisplaySettings : MonoBehaviour
 
     void SetWindowMode(int index)
     {
-        FullScreenMode mode = FullScreenMode.Windowed;
-
         switch (index)
         {
             case 0: // Windowed
-                mode = FullScreenMode.Windowed;
-                ApplyStandardMode(mode);
+                ApplyStandardMode(FullScreenMode.Windowed);
                 break;
             case 1: // Fullscreen
-                mode = FullScreenMode.ExclusiveFullScreen;
-                ApplyStandardMode(mode);
+                ApplyStandardMode(FullScreenMode.ExclusiveFullScreen);
                 break;
             case 2: // Borderless
-                mode = FullScreenMode.FullScreenWindow;
-                ApplyStandardMode(mode);
+                ApplyStandardMode(FullScreenMode.FullScreenWindow);
                 break;
             case 3: // Windowed Borderless
-                ApplyWindowedBorderlessMode();
+                StartCoroutine(ToggleWindowedBorderless());
                 break;
         }
 
@@ -96,29 +94,63 @@ public class DisplaySettings : MonoBehaviour
         PlayerPrefs.SetInt(DISPLAY_MODE_PREF_KEY, index);
         PlayerPrefs.Save();
 
-        Debug.Log($"Display mode set to: {mode}");
+        Debug.Log($"Display mode set to: {index}");
+    }
+
+    IEnumerator ToggleWindowedBorderless()
+    {
+        Resolution resolution = resolutions[resolutionDropdown.value];
+
+        // First switch to Windowed Borderless
+        ApplyWindowedBorderlessMode();
+        yield return new WaitForSeconds(WINDOWED_BORDERLESS_DURATION);
+
+        // Temporarily switch to Windowed mode
+        ApplyStandardMode(FullScreenMode.Windowed);
+        yield return new WaitForSeconds(WINDOWED_BORDERLESS_DURATION);
+
+        // Switch back to Windowed Borderless
+        ApplyWindowedBorderlessMode();
     }
 
     void ApplyStandardMode(FullScreenMode mode)
     {
+        IntPtr hWnd = GetActiveWindow();
+
+        // Restore the WS_OVERLAPPEDWINDOW style (for Windowed mode)
+        int style = GetWindowLong(hWnd, GWL_STYLE);
+        style |= WS_OVERLAPPEDWINDOW; // Add back the title bar and borders
+        style &= ~WS_POPUP;           // Remove the borderless style
+        SetWindowLong(hWnd, GWL_STYLE, style);
+
+        // Apply the standard mode using Unity's Screen API
         Screen.fullScreenMode = mode;
+
+        // Trigger a redraw to ensure the window style is updated
+        SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+
+        Debug.Log("Switched to standard mode with title bar restored.");
     }
 
     void ApplyWindowedBorderlessMode()
     {
         Resolution resolution = resolutions[resolutionDropdown.value];
+
+        // Ensure the screen is in Windowed mode first
         Screen.SetResolution(resolution.width, resolution.height, FullScreenMode.Windowed);
 
         IntPtr hWnd = GetActiveWindow();
 
         // Set window style to popup (borderless)
         int style = GetWindowLong(hWnd, GWL_STYLE);
-        style &= ~WS_OVERLAPPEDWINDOW;
-        style |= WS_POPUP; // WS_POPUP is now an int
+        style &= ~WS_OVERLAPPEDWINDOW; // Remove the standard Windowed style
+        style |= WS_POPUP;             // Add the borderless style
         SetWindowLong(hWnd, GWL_STYLE, style);
 
-        // Resize and reposition window to exclude the title bar
+        // Resize and reposition the window to fill the desired area
         SetWindowPos(hWnd, IntPtr.Zero, 0, 0, resolution.width, resolution.height, SWP_NOMOVE | SWP_FRAMECHANGED);
+
+        Debug.Log("Switched to Windowed Borderless mode.");
     }
 
     void LoadSettings()
@@ -142,19 +174,11 @@ public class DisplaySettings : MonoBehaviour
 
         if (savedDisplayMode == 3) // Windowed Borderless
         {
-            ApplyWindowedBorderlessMode();
+            StartCoroutine(ToggleWindowedBorderless());
         }
         else
         {
-            FullScreenMode mode = FullScreenMode.Windowed;
-            switch (savedDisplayMode)
-            {
-                case 0: mode = FullScreenMode.Windowed; break;
-                case 1: mode = FullScreenMode.ExclusiveFullScreen; break;
-                case 2: mode = FullScreenMode.FullScreenWindow; break;
-            }
-
-            ApplyStandardMode(mode);
+            ApplyStandardMode((FullScreenMode)savedDisplayMode);
         }
     }
 }
