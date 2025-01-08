@@ -34,11 +34,25 @@ public class DisplaySettings : MonoBehaviour
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
 
+    [DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hWnd, out Rect lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool AdjustWindowRectEx(ref Rect lpRect, uint dwStyle, bool bMenu, uint dwExStyle);
+
     private const int SM_CYCAPTION = 4; // Height of the window title bar
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_FRAMECHANGED = 0x0020;
+
+    private struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 
     void Start()
     {
@@ -165,6 +179,15 @@ public class DisplaySettings : MonoBehaviour
         Debug.Log($"Window centered at: ({x}, {y}) with title bar height adjustment.");
     }
 
+    void DebugClientArea(IntPtr hWnd)
+    {
+        GetClientRect(hWnd, out Rect clientRect);
+        int clientWidth = clientRect.Right - clientRect.Left;
+        int clientHeight = clientRect.Bottom - clientRect.Top;
+
+        Debug.Log($"Actual client area: {clientWidth}x{clientHeight}");
+    }
+
     void ApplyWindowedBorderlessMode()
     {
         Resolution resolution = resolutions[resolutionDropdown.value];
@@ -174,17 +197,59 @@ public class DisplaySettings : MonoBehaviour
 
         IntPtr hWnd = GetActiveWindow();
 
-        // Set window style to popup (borderless)
+        // Set the window style to popup (borderless)
         int style = GetWindowLong(hWnd, GWL_STYLE);
-        style &= ~WS_OVERLAPPEDWINDOW; // Remove the standard Windowed style
-        style |= WS_POPUP;             // Add the borderless style
+        style &= ~WS_OVERLAPPEDWINDOW; // Remove standard window style
+        style |= WS_POPUP;             // Add borderless popup style
         SetWindowLong(hWnd, GWL_STYLE, style);
 
-        // Resize and reposition the window to fill the desired area
-        SetWindowPos(hWnd, IntPtr.Zero, 0, 0, resolution.width, resolution.height, SWP_NOMOVE | SWP_FRAMECHANGED);
+        // Calculate the initial required window size for the target resolution
+        Rect rect = new Rect
+        {
+            Left = 0,
+            Top = 0,
+            Right = resolution.width,
+            Bottom = resolution.height
+        };
 
-        Debug.Log("Switched to Windowed Borderless mode.");
+        AdjustWindowRectEx(ref rect, (uint)style, false, 0);
+
+        int adjustedWidth = rect.Right - rect.Left;
+        int adjustedHeight = rect.Bottom - rect.Top;
+
+        Debug.Log($"Initial adjusted window size: {adjustedWidth}x{adjustedHeight}");
+
+        // Resize the window
+        SetWindowPos(hWnd, IntPtr.Zero, 0, 0, adjustedWidth, adjustedHeight, SWP_NOMOVE | SWP_FRAMECHANGED);
+
+        // Verify and iteratively correct the client area size
+        for (int i = 0; i < 5; i++)
+        {
+            GetClientRect(hWnd, out Rect clientRect);
+            int clientWidth = clientRect.Right - clientRect.Left;
+            int clientHeight = clientRect.Bottom - clientRect.Top;
+
+            if (clientWidth == resolution.width && clientHeight == resolution.height)
+            {
+                Debug.Log($"Client area matches target resolution: {clientWidth}x{clientHeight}");
+                break;
+            }
+
+            // Adjust the window size based on the discrepancy
+            int widthDifference = resolution.width - clientWidth;
+            int heightDifference = resolution.height - clientHeight;
+
+            Debug.Log($"Adjusting window size by: Width={widthDifference}, Height={heightDifference}");
+
+            adjustedWidth += widthDifference;
+            adjustedHeight += heightDifference;
+
+            SetWindowPos(hWnd, IntPtr.Zero, 0, 0, adjustedWidth, adjustedHeight, SWP_NOMOVE | SWP_FRAMECHANGED);
+        }
+
+        Debug.Log($"Final window size: {adjustedWidth}x{adjustedHeight}");
     }
+
 
     void LoadSettings()
     {
