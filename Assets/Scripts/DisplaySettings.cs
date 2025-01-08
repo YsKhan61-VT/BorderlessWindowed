@@ -31,6 +31,10 @@ public class DisplaySettings : MonoBehaviour
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    private const int SM_CYCAPTION = 4; // Height of the window title bar
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOZORDER = 0x0004;
@@ -146,13 +150,19 @@ public class DisplaySettings : MonoBehaviour
         int windowWidth = Screen.width;
         int windowHeight = Screen.height;
 
+        // Get the height of the title bar
+        int titleBarHeight = GetSystemMetrics(SM_CYCAPTION);
+
         // Calculate the top-left corner to center the window
         int x = (screenWidth - windowWidth) / 2;
         int y = (screenHeight - windowHeight) / 2;
 
+        // Adjust Y to account for the title bar
+        y = Math.Max(0, y - titleBarHeight / 2); // Prevent moving off the screen
+
         // Position the window
         SetWindowPos(hWnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        Debug.Log($"Window centered at: ({x}, {y})");
+        Debug.Log($"Window centered at: ({x}, {y}) with title bar height adjustment.");
     }
 
     void ApplyWindowedBorderlessMode()
