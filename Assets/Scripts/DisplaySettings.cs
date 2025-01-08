@@ -33,6 +33,7 @@ public class DisplaySettings : MonoBehaviour
 
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_FRAMECHANGED = 0x0020;
 
     void Start()
@@ -126,10 +127,32 @@ public class DisplaySettings : MonoBehaviour
         // Apply the standard mode using Unity's Screen API
         Screen.fullScreenMode = mode;
 
+        // Center the window on the screen
+        CenterWindow(hWnd);
+
         // Trigger a redraw to ensure the window style is updated
         SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
 
-        Debug.Log("Switched to standard mode with title bar restored.");
+        Debug.Log("Switched to standard mode with title bar restored and window centered.");
+    }
+
+    void CenterWindow(IntPtr hWnd)
+    {
+        // Get the monitor's screen dimensions
+        int screenWidth = Screen.currentResolution.width;
+        int screenHeight = Screen.currentResolution.height;
+
+        // Get the window's resolution
+        int windowWidth = Screen.width;
+        int windowHeight = Screen.height;
+
+        // Calculate the top-left corner to center the window
+        int x = (screenWidth - windowWidth) / 2;
+        int y = (screenHeight - windowHeight) / 2;
+
+        // Position the window
+        SetWindowPos(hWnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+        Debug.Log($"Window centered at: ({x}, {y})");
     }
 
     void ApplyWindowedBorderlessMode()
