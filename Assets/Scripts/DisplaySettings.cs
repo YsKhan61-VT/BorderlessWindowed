@@ -136,8 +136,13 @@ public class DisplaySettings : MonoBehaviour
     {
         Resolution resolution = resolutions[resolutionDropdown.value];
 
+        // Manually reduce width and height
+        int targetWidth = resolution.width - 16;  // Subtract 16 pixels
+        int targetHeight = resolution.height - 39; // Subtract 39 pixels
+
         // Ensure the screen is in Windowed mode first
-        Screen.SetResolution(resolution.width, resolution.height, FullScreenMode.Windowed);
+        // Screen.SetResolution(resolution.width, resolution.height, FullScreenMode.Windowed);
+        Screen.SetResolution(targetWidth, targetHeight, FullScreenMode.Windowed);
 
         IntPtr hWnd = GetActiveWindow();
 
@@ -147,10 +152,10 @@ public class DisplaySettings : MonoBehaviour
         style |= WS_POPUP;             // Add the borderless style
         SetWindowLong(hWnd, GWL_STYLE, style);
 
-        // Resize and reposition the window to fill the desired area
-        SetWindowPos(hWnd, IntPtr.Zero, 0, 0, resolution.width, resolution.height, SWP_NOMOVE | SWP_FRAMECHANGED);
+        // Resize and reposition the window with manual adjustments
+        SetWindowPos(hWnd, IntPtr.Zero, 0, 0, targetWidth, targetHeight, SWP_NOMOVE | SWP_FRAMECHANGED);
 
-        Debug.Log("Switched to Windowed Borderless mode.");
+        Debug.Log($"Switched to Windowed Borderless mode with adjusted size: {targetWidth}x{targetHeight}");
     }
 
     void LoadSettings()
