@@ -31,6 +31,18 @@ public class DisplaySettings : MonoBehaviour
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
+    [DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hWnd, out Rect lpRect);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_FRAMECHANGED = 0x0020;
@@ -126,23 +138,34 @@ public class DisplaySettings : MonoBehaviour
         // Apply the standard mode using Unity's Screen API
         Screen.fullScreenMode = mode;
 
-        // Trigger a redraw to ensure the window style is updated
-        SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+        if (mode == FullScreenMode.Windowed)
+        {
+            // Get current resolution
+            Resolution resolution = resolutions[resolutionDropdown.value];
 
-        Debug.Log("Switched to standard mode with title bar restored.");
+            // Add 16 pixels to width and 39 pixels to height
+            int adjustedWidth = resolution.width + 16;
+            int adjustedHeight = resolution.height + 39;
+
+            // Apply the resized window
+            SetWindowPos(hWnd, IntPtr.Zero, 0, 0, adjustedWidth, adjustedHeight, SWP_FRAMECHANGED | SWP_NOMOVE);
+
+            Debug.Log($"Switched to Windowed mode with adjusted size: {adjustedWidth}x{adjustedHeight}");
+        }
+        else
+        {
+            // For non-windowed modes, just update the style
+            SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+            Debug.Log("Switched to non-Windowed mode (Fullscreen or Borderless).");
+        }
     }
 
     void ApplyWindowedBorderlessMode()
     {
         Resolution resolution = resolutions[resolutionDropdown.value];
 
-        // Manually reduce width and height
-        int targetWidth = resolution.width - 16;  // Subtract 16 pixels
-        int targetHeight = resolution.height - 39; // Subtract 39 pixels
-
         // Ensure the screen is in Windowed mode first
-        // Screen.SetResolution(resolution.width, resolution.height, FullScreenMode.Windowed);
-        Screen.SetResolution(targetWidth, targetHeight, FullScreenMode.Windowed);
+        Screen.SetResolution(resolution.width, resolution.height, FullScreenMode.Windowed);
 
         IntPtr hWnd = GetActiveWindow();
 
@@ -152,10 +175,14 @@ public class DisplaySettings : MonoBehaviour
         style |= WS_POPUP;             // Add the borderless style
         SetWindowLong(hWnd, GWL_STYLE, style);
 
-        // Resize and reposition the window with manual adjustments
+        // Force the window size to match the target resolution
+        int targetWidth = resolution.width + 1;
+        int targetHeight = resolution.height + 1;
+
+        // Resize the window to match the resolution exactly
         SetWindowPos(hWnd, IntPtr.Zero, 0, 0, targetWidth, targetHeight, SWP_NOMOVE | SWP_FRAMECHANGED);
 
-        Debug.Log($"Switched to Windowed Borderless mode with adjusted size: {targetWidth}x{targetHeight}");
+        Debug.Log($"Switched to Windowed Borderless mode with enforced size: {targetWidth}x{targetHeight}");
     }
 
     void LoadSettings()
