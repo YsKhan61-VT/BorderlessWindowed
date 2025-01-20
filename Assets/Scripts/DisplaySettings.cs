@@ -47,6 +47,9 @@ public class DisplaySettings : MonoBehaviour
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_FRAMECHANGED = 0x0020;
 
+    private int selectedResolutionIndex;
+    private int selectedDisplayMode;
+
     void Start()
     {
         // Populate resolution dropdown
@@ -61,15 +64,21 @@ public class DisplaySettings : MonoBehaviour
         windowModeDropdown.ClearOptions();
         windowModeDropdown.options.Add(new TMP_Dropdown.OptionData("Windowed"));
         windowModeDropdown.options.Add(new TMP_Dropdown.OptionData("Fullscreen"));
-        windowModeDropdown.options.Add(new TMP_Dropdown.OptionData("Borderless"));
         windowModeDropdown.options.Add(new TMP_Dropdown.OptionData("Windowed Borderless"));
 
-        // Load saved settings
+        // Load saved settings or default to fullscreen at current resolution
         LoadSettings();
+    }
 
-        // Bind UI events
-        resolutionDropdown.onValueChanged.AddListener(SetResolution);
-        windowModeDropdown.onValueChanged.AddListener(SetWindowMode);
+    public void OnApplyButtonClicked()
+    {
+        // Read the selected values from the dropdowns
+        selectedResolutionIndex = resolutionDropdown.value;
+        selectedDisplayMode = windowModeDropdown.value;
+
+        // Apply the settings
+        SetResolution(selectedResolutionIndex);
+        SetWindowMode(selectedDisplayMode);
     }
 
     void SetResolution(int index)
@@ -94,10 +103,7 @@ public class DisplaySettings : MonoBehaviour
             case 1: // Fullscreen
                 ApplyStandardMode(FullScreenMode.ExclusiveFullScreen);
                 break;
-            case 2: // Borderless
-                ApplyStandardMode(FullScreenMode.FullScreenWindow);
-                break;
-            case 3: // Windowed Borderless
+            case 2: // Windowed Borderless
                 StartCoroutine(ToggleWindowedBorderless());
                 break;
         }
@@ -141,11 +147,14 @@ public class DisplaySettings : MonoBehaviour
         if (mode == FullScreenMode.Windowed)
         {
             // Get current resolution
-            Resolution resolution = resolutions[resolutionDropdown.value];
+            Resolution resolution = resolutions[selectedResolutionIndex];
 
             // Add 16 pixels to width and 39 pixels to height
             int adjustedWidth = resolution.width + 16;
             int adjustedHeight = resolution.height + 39;
+
+            // Center the window
+            CenterWindow(hWnd, adjustedWidth, adjustedHeight);
 
             // Apply the resized window
             SetWindowPos(hWnd, IntPtr.Zero, 0, 0, adjustedWidth, adjustedHeight, SWP_FRAMECHANGED | SWP_NOMOVE);
@@ -162,7 +171,7 @@ public class DisplaySettings : MonoBehaviour
 
     void ApplyWindowedBorderlessMode()
     {
-        Resolution resolution = resolutions[resolutionDropdown.value];
+        Resolution resolution = resolutions[selectedResolutionIndex];
 
         // Ensure the screen is in Windowed mode first
         Screen.SetResolution(resolution.width, resolution.height, FullScreenMode.Windowed);
@@ -179,38 +188,52 @@ public class DisplaySettings : MonoBehaviour
         int targetWidth = resolution.width + 1;
         int targetHeight = resolution.height + 1;
 
+        // Center the window
+        CenterWindow(hWnd, targetWidth, targetHeight);
+
         // Resize the window to match the resolution exactly
         SetWindowPos(hWnd, IntPtr.Zero, 0, 0, targetWidth, targetHeight, SWP_NOMOVE | SWP_FRAMECHANGED);
 
         Debug.Log($"Switched to Windowed Borderless mode with enforced size: {targetWidth}x{targetHeight}");
     }
 
+    void CenterWindow(IntPtr hWnd, int width, int height)
+    {
+        // Get screen resolution
+        int screenWidth = Screen.currentResolution.width;
+        int screenHeight = Screen.currentResolution.height;
+
+        // Calculate top-left corner position to center the window
+        int x = (screenWidth - width) / 2;
+        int y = (screenHeight - height) / 2;
+
+        // Set the window's position
+        SetWindowPos(hWnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_FRAMECHANGED);
+
+        Debug.Log($"Window centered at: ({x}, {y}) with size: {width}x{height}");
+    }
+
     void LoadSettings()
     {
-        // Load resolution index
-        int savedResolutionIndex = PlayerPrefs.GetInt(RESOLUTION_PREF_KEY, 0); // Default to first resolution
-        resolutionDropdown.value = savedResolutionIndex;
-        resolutionDropdown.RefreshShownValue();
-
-        // Apply saved resolution
-        if (resolutions.Length > savedResolutionIndex)
+        // Check if saved settings exist
+        if (PlayerPrefs.HasKey(RESOLUTION_PREF_KEY) && PlayerPrefs.HasKey(DISPLAY_MODE_PREF_KEY))
         {
-            Resolution savedResolution = resolutions[savedResolutionIndex];
-            Screen.SetResolution(savedResolution.width, savedResolution.height, Screen.fullScreenMode);
-        }
-
-        // Load and apply display mode
-        int savedDisplayMode = PlayerPrefs.GetInt(DISPLAY_MODE_PREF_KEY, 0); // Default to Windowed
-        windowModeDropdown.value = savedDisplayMode;
-        windowModeDropdown.RefreshShownValue();
-
-        if (savedDisplayMode == 3) // Windowed Borderless
-        {
-            StartCoroutine(ToggleWindowedBorderless());
+            // Load saved preferences
+            selectedResolutionIndex = PlayerPrefs.GetInt(RESOLUTION_PREF_KEY, 0);
+            selectedDisplayMode = PlayerPrefs.GetInt(DISPLAY_MODE_PREF_KEY, 1); // Default to Fullscreen
         }
         else
         {
-            ApplyStandardMode((FullScreenMode)savedDisplayMode);
+            // Default to fullscreen and current resolution
+            selectedResolutionIndex = Array.FindIndex(resolutions, r =>
+                r.width == Screen.currentResolution.width && r.height == Screen.currentResolution.height);
+            if (selectedResolutionIndex == -1) selectedResolutionIndex = 0;
+            selectedDisplayMode = 1; // Fullscreen
         }
+
+        resolutionDropdown.value = selectedResolutionIndex;
+        resolutionDropdown.RefreshShownValue();
+        windowModeDropdown.value = selectedDisplayMode;
+        windowModeDropdown.RefreshShownValue();
     }
 }
